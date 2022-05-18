@@ -202,6 +202,12 @@ parser.add_argument(
     "--rua", action="store_true", help="Send random User-Agent in each request."
 )
 parser.add_argument(
+    "--only-new",
+    dest="onlynew",
+    action="store_true",
+    help="When used with -c, ommit entries that were not present in compared file, i.e., shows only new observed entries."
+)
+parser.add_argument(
     "--timeout",
     default=60,
     type=float,
@@ -311,19 +317,21 @@ if len(valid_users) != 0:
         diff_minus = list(diff_minus)
         diff_plus.sort()
         diff_minus.sort()
-        if len(diff_plus) > 0 or len(diff_minus) > 0:
+        if len(diff_plus) > 0 or (not args.onlynew and len(diff_minus)) > 0:
             with open('cmp_'+args.out, "w") as cmp_file:
                 cmp_file.write("\n".join([f"+ {u}" for u in diff_plus]))
-                cmp_file.write("\n".join([f"- {u}" for u in diff_minus]))            
+                if not args.onlynew:
+                    cmp_file.write("\n".join([f"- {u}" for u in diff_minus]))            
                 print(f"Comparison results have been written to {'cmp_'+args.out}.")
     
 if args.notify:
-    if args.compare and (len(diff_plus) > 0 or len(diff_minus) > 0):
+    if args.compare and (len(diff_plus) > 0 or (not args.onlynnew and len(diff_minus)) > 0):
         msg = "Found differences! o.o\n\n"
         if len(diff_plus) > 0:
             msg += "\n".join([f"+ {u}" for u in diff_plus])
             msg += "\n"
-        msg += "\n".join([f"- {u}" for u in diff_minus])
+        if not args.onlynew:
+            msg += "\n".join([f"- {u}" for u in diff_minus])
         notify(args.notify, msg)
     elif args.compare is None and len(valid_users) != 0:
         msg = "Found valid users! (-.^)\n\n"
