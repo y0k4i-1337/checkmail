@@ -325,7 +325,7 @@ if len(valid_users) != 0:
                 print(f"Comparison results have been written to {'cmp_'+args.out}.")
     
 if args.notify:
-    if args.compare and (len(diff_plus) > 0 or (not args.onlynnew and len(diff_minus)) > 0):
+    if args.compare and (len(diff_plus) > 0 or (not args.onlynew and len(diff_minus)) > 0):
         msg = "Found differences! o.o\n\n"
         if len(diff_plus) > 0:
             msg += "\n".join([f"+ {u}" for u in diff_plus])
