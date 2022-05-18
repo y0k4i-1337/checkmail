@@ -131,6 +131,12 @@ parser.add_argument(
     help="A file to output valid results to (default: %(default)s).",
 )
 parser.add_argument(
+    "-c",
+    "--compare",
+    type=str,
+    help="Compare current result against a previous one and ouput only differences."
+)
+parser.add_argument(
     "-x",
     "--proxy",
     type=str,
@@ -224,10 +230,10 @@ if args.proxy:
         "https": args.proxy,
     }
 
-start_time = time.strftime("%Y%m%d%H%M%S")
-
 username_count = len(usernames)
-headers = dict()
+headers = {
+    "Connection": "close"
+}
 # include custom headers
 if args.headers:
     for header in args.headers:
@@ -238,10 +244,10 @@ ua = UserAgent(fallback=args.user_agent)  # avoid exception with fallback
 valid_users = set()
 
 
-async def fetch(session, username, headers):
+async def fetch(session, username, headers, id):
     # FIX: causing connection to hang
-    # if args.sleep > 0:
-    #     time.sleep(args.sleep + args.sleep * (randrange(args.jitter) / 100))
+    if id > 0 and args.sleep > 0:
+        await asyncio.sleep(args.sleep + args.sleep * (randrange(args.jitter) / 100))
     # set user-agent
     if args.rua:      
         headers["User-Agent"] = ua.random
@@ -249,33 +255,41 @@ async def fetch(session, username, headers):
         headers["User-Agent"] = args.user_agent
 
     params = {"email": username}
-    try:
-        async with session.head('/mail/gxlu', headers=headers, params=params, proxy=args.proxy) as resp:
-            if "COMPASS" in resp.cookies.keys():
-                print(
-                    f"{text_colors.green}{username} VALID!{text_colors.reset}"
-                )
-                valid_users.add(username)
-            else:
-                if args.verbose:
+    ok = False
+    retry = 0
+    while not ok and retry < 3:
+        try:
+            async with session.head(args.url + '/mail/gxlu', headers=headers, params=params, proxy=args.proxy) as resp:
+                if "COMPASS" in resp.cookies.keys():
                     print(
-                        f"{text_colors.red}{username} invalid!{text_colors.reset}"
+                        f"{text_colors.green}{username} VALID!{text_colors.reset}"
                     )
+                    valid_users.add(username)
+                else:
+                    if args.verbose:
+                        print(
+                            f"{text_colors.red}{username} invalid!{text_colors.reset}"
+                        )
+                ok = True
                 
-    except Exception as e:
-        print(
-            f"{text_colors.red}Error: {e}{text_colors.reset}"
-        )
-        pass
+        except Exception as e:
+            retry += 1
+            if retry == 3:
+                print(
+                    f"{text_colors.red}Error: {e}{text_colors.reset}"
+                )
 
 
 async def main():
-    username_counter = 0
+    username_count = len(usernames)
     timeout = aiohttp.ClientTimeout(total=args.timeout)
     connector = aiohttp.TCPConnector(limit=args.maxconn)
-    async with aiohttp.ClientSession(args.url, timeout=timeout, connector=connector) as session:
-        await asyncio.gather(*[asyncio.ensure_future(fetch(session, username, headers)) for username in usernames])
-            
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+        print(f"There are {username_count} users in total to check.")
+        print(f"Current date and time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        start_time = time.time()
+        await asyncio.gather(*[asyncio.ensure_future(fetch(session, username, headers.copy(), id)) for id, username in enumerate(usernames)])
+        print(f"Elapsed time: {time.time()-start_time}s")
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
@@ -287,8 +301,34 @@ if len(valid_users) != 0:
         result = list(valid_users)
         result.sort()
         out_file.write("\n".join(result))
-    print(f"Results have been written to {args.out}.")
-    if args.notify:
-        msg = "Found valid users! (-.^)\n\n"
-        msg += "\n".join(result)
+        print(f"Results have been written to {args.out}.")
+
+    if args.compare:
+        oldlist = set(get_list_from_file(args.compare))
+        diff_plus = valid_users.difference(oldlist)
+        diff_minus = oldlist.difference(valid_users)
+        diff_plus = list(diff_plus)
+        diff_minus = list(diff_minus)
+        diff_plus.sort()
+        diff_minus.sort()
+        if len(diff_plus) > 0 or len(diff_minus) > 0:
+            with open('cmp_'+args.out, "w") as cmp_file:
+                cmp_file.write("\n".join([f"+ {u}" for u in diff_plus]))
+                cmp_file.write("\n".join([f"- {u}" for u in diff_minus]))            
+                print(f"Comparison results have been written to {'cmp_'+args.out}.")
+    
+if args.notify:
+    if args.compare and (len(diff_plus) > 0 or len(diff_minus) > 0):
+        msg = "Found differences! o.o\n\n"
+        if len(diff_plus) > 0:
+            msg += "\n".join([f"+ {u}" for u in diff_plus])
+            msg += "\n"
+        msg += "\n".join([f"- {u}" for u in diff_minus])
         notify(args.notify, msg)
+    elif args.compare is None and len(valid_users) != 0:
+        msg = "Found valid users! (-.^)\n\n"
+        msg += "\n".join(valid_users)
+        notify(args.notify, msg)
+    else:
+        print(f"[!] Notify option set but nothing to report")
+
