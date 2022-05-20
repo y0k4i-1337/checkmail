@@ -137,6 +137,12 @@ parser.add_argument(
     help="Compare current result against a previous one and ouput only differences."
 )
 parser.add_argument(
+    "--cmpout",
+    metavar="CMP_OUTFILE",
+    default="cmp_users.txt",
+    help="A file to output the results of usernames comparison (default: %(default)s)",
+)
+parser.add_argument(
     "-x",
     "--proxy",
     type=str,
@@ -318,7 +324,7 @@ if len(valid_users) != 0:
         diff_plus.sort()
         diff_minus.sort()
         if len(diff_plus) > 0 or (not args.onlynew and len(diff_minus)) > 0:
-            with open('cmp_'+args.out, "w") as cmp_file:
+            with open(args.cmpout, "w") as cmp_file:
                 cmp_file.write("\n".join([f"+ {u}" for u in diff_plus]))
                 if not args.onlynew:
                     cmp_file.write("\n".join([f"- {u}" for u in diff_minus]))            
