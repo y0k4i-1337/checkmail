@@ -160,7 +160,7 @@ parser.add_argument(
     "--url",
     default="https://mail.google.com",
     help=("Target URL (default: %(default)s)."
-        " Potentially useful if pointing at an API Gateway URL generated with something like FireProx to randomize the IP address you are authenticating from."),
+        " Potentially useful if pointing at an API Gateway URL generated with something like FireProx to randomize the IP address you are connecting from."),
 )
 parser.add_argument(
     "--shuffle",
