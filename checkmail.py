@@ -231,6 +231,8 @@ assertions(args)
 
 args.jitter += 1
 
+semaphore = asyncio.Semaphore(args.maxconn)
+
 usernames = [args.username] if args.username else get_list_from_file(args.usernames)
 if args.shuffle:
     shuffle(usernames)
@@ -256,40 +258,40 @@ ua = UserAgent(fallback=args.user_agent)  # avoid exception with fallback
 valid_users = set()
 
 
-async def fetch(session, username, headers, id):
-    # FIX: causing connection to hang
-    if id > 0 and args.sleep > 0:
-        await asyncio.sleep(args.sleep + args.sleep * (randrange(args.jitter) / 100))
-    # set user-agent
-    if args.rua:      
-        headers["User-Agent"] = ua.random
-    else:
-        headers["User-Agent"] = args.user_agent
+async def fetch(session, username, headers, uid):
+    async with semaphore:
+        if uid > 0 and args.sleep > 0:
+            await asyncio.sleep(args.sleep + args.sleep * (randrange(args.jitter) / 100))
+        # set user-agent
+        if args.rua:
+            headers["User-Agent"] = ua.random
+        else:
+            headers["User-Agent"] = args.user_agent
 
-    params = {"email": username}
-    ok = False
-    retry = 0
-    while not ok and retry < 3:
-        try:
-            async with session.head(args.url + '/mail/gxlu', headers=headers, params=params, proxy=args.proxy) as resp:
-                if "COMPASS" in resp.cookies.keys():
-                    print(
-                        f"{text_colors.green}{username} VALID!{text_colors.reset}"
-                    )
-                    valid_users.add(username)
-                else:
-                    if args.verbose:
+        params = {"email": username}
+        ok = False
+        retry = 0
+        while not ok and retry < 3:
+            try:
+                async with session.head(args.url + '/mail/gxlu', headers=headers, params=params, proxy=args.proxy) as resp:
+                    if "COMPASS" in resp.cookies.keys():
                         print(
-                            f"{text_colors.red}{username} invalid!{text_colors.reset}"
+                            f"{text_colors.green}{username} VALID!{text_colors.reset}"
                         )
-                ok = True
+                        valid_users.add(username)
+                    else:
+                        if args.verbose:
+                            print(
+                                f"{text_colors.red}{username} invalid!{text_colors.reset}"
+                            )
+                    ok = True
                 
-        except Exception as e:
-            retry += 1
-            if retry == 3:
-                print(
-                    f"{text_colors.red}Error: {e}{text_colors.reset}"
-                )
+            except Exception as e:
+                retry += 1
+                if retry == 3:
+                    print(
+                        f"{text_colors.red}Error: {e}{text_colors.reset}"
+                    )
 
 
 async def main():
@@ -300,7 +302,7 @@ async def main():
         print(f"There are {username_count} users in total to check.")
         print(f"Current date and time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         start_time = time.time()
-        await asyncio.gather(*[asyncio.ensure_future(fetch(session, username, headers.copy(), id)) for id, username in enumerate(usernames)])
+        await asyncio.gather(*[asyncio.ensure_future(fetch(session, username, headers.copy(), uid)) for uid, username in enumerate(usernames)], return_exceptions=False)
         print(f"Elapsed time: {time.time()-start_time}s")
 
 loop = asyncio.get_event_loop()
