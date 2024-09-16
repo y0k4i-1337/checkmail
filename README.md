@@ -1,3 +1,9 @@
+# Archived
+
+Google has changed their login logic, so the technique used by this tool no longer works.
+
+Please, check it out this alternative: [https://github.com/y0k4i-1337/domgoo](https://github.com/y0k4i-1337/domgoo).
+
 # checkmail
 
 Check if gmail account exists or not.
